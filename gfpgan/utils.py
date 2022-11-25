@@ -9,6 +9,10 @@ from torchvision.transforms.functional import normalize
 from gfpgan.archs.gfpgan_bilinear_arch import GFPGANBilinear
 from gfpgan.archs.gfpganv1_arch import GFPGANv1
 from gfpgan.archs.gfpganv1_clean_arch import GFPGANv1Clean
+from utilities import timer
+import time
+from basicsr.utils import imwrite
+from cl import test
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,7 +32,7 @@ class GFPGANer():
         channel_multiplier (int): Channel multiplier for large networks of StyleGAN2. Default: 2.
         bg_upsampler (nn.Module): The upsampler for the background. Default: None.
     """
-
+    @timer
     def __init__(self, model_path, upscale=2, arch='clean', channel_multiplier=2, bg_upsampler=None, device=None):
         self.upscale = upscale
         self.bg_upsampler = bg_upsampler
@@ -76,7 +80,7 @@ class GFPGANer():
             from gfpgan.archs.restoreformer_arch import RestoreFormer
             self.gfpgan = RestoreFormer()
         # initialize face helper
-        self.face_helper = FaceRestoreHelper(
+        self.face_helper = test(
             upscale,
             face_size=512,
             crop_ratio=(1, 1),
@@ -99,7 +103,10 @@ class GFPGANer():
         self.gfpgan = self.gfpgan.to(self.device)
 
     @torch.no_grad()
-    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5):
+    @timer
+    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5, mask=0):
+        start_time = time.perf_counter()
+        # print('*' * 30)
         self.face_helper.clean_all()
 
         if has_aligned:  # the inputs are already aligned
@@ -113,9 +120,16 @@ class GFPGANer():
             # TODO: even with eye_dist_threshold, it will still introduce wrong detections and restorations.
             # align and warp each face
             self.face_helper.align_warp_face()
+        # print('*' * 30)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        # print(f'function cropped faces took {total_time:.3f} seconds')
 
+        start_time = time.perf_counter()
+        # print('*' * 30)
         # face restoration
         for cropped_face in self.face_helper.cropped_faces:
+            # imwrite(cropped_face, )
             # prepare data
             cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
             normalize(cropped_face_t, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
@@ -132,17 +146,36 @@ class GFPGANer():
             restored_face = restored_face.astype('uint8')
             self.face_helper.add_restored_face(restored_face)
 
+        # print('*' * 30)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        # print(f'faces restoration faces took {total_time:.3f} seconds')
+
+        start_time = time.perf_counter()
+        # print('*' * 30)
         if not has_aligned and paste_back:
-            # upsample the background
-            if self.bg_upsampler is not None:
-                # Now only support RealESRGAN for upsampling background
-                bg_img = self.bg_upsampler.enhance(img, outscale=self.upscale)[0]
-            else:
-                bg_img = None
+            # # upsample the background
+            # if self.bg_upsampler is not None:
+            #     # Now only support RealESRGAN for upsampling background
+            #     bg_img = self.bg_upsampler.enhance(img, outscale=self.upscale)[0]
+            # else:
+            #     bg_img = None
 
             self.face_helper.get_inverse_affine(None)
             # paste each restored face to the input image
-            restored_img = self.face_helper.paste_faces_to_input_image(upsample_img=bg_img)
+            # restored_img = self.face_helper.paste_faces_to_input_image(upsample_img=None)
+            restored_img = self.face_helper.tmp(mask=mask)
+
+            # print('*' * 30)
+            end_time = time.perf_counter()
+            total_time = end_time - start_time
+            # print(f'if line took {total_time:.3f} seconds')
+
             return self.face_helper.cropped_faces, self.face_helper.restored_faces, restored_img
         else:
+
+            # print('*' * 30)
+            end_time = time.perf_counter()
+            total_time = end_time - start_time
+            # print(f'else line took {total_time:.3f} seconds')
             return self.face_helper.cropped_faces, self.face_helper.restored_faces, None

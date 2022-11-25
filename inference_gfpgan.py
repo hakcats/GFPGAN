@@ -5,10 +5,12 @@ import numpy as np
 import os
 import torch
 from basicsr.utils import imwrite
+from utilities import timer
 
 from gfpgan import GFPGANer
+from facexlib.parsing import init_parsing_model
 
-
+@timer
 def main():
     """Inference demo for GFPGAN (for users).
     """
@@ -123,36 +125,64 @@ def main():
         bg_upsampler=bg_upsampler)
 
     # ------------------------ restore ------------------------
+    i = 0
+    f = 'tor/{}.pth'.format(1)
+    out = torch.load(f)
+
+    mask = np.zeros((512, 512))
+    MASK_COLORMAP = [0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 0, 0, 0]
+
+    for idx, color in enumerate(MASK_COLORMAP):
+        mask[out == idx] = color
+
+    #  blur the mask
+    mask = cv2.GaussianBlur(mask, (101, 101), 11)
+    mask = cv2.GaussianBlur(mask, (101, 101), 11)
+    # remove the black borders
+    thres = 10
+    mask[:thres, :] = 0
+    mask[-thres:, :] = 0
+    mask[:, :thres] = 0
+    mask[:, -thres:] = 0
+    mask = mask / 255.
+
+
     for img_path in img_list:
+        i += 1
         # read image
         img_name = os.path.basename(img_path)
         print(f'Processing {img_name} ...')
         basename, ext = os.path.splitext(img_name)
         input_img = cv2.imread(img_path, cv2.IMREAD_COLOR)
 
+        # parse_m = init_parsing_model(model_name='parsenet', device='cuda', model_rootpath=None)
+
         # restore faces and background if necessary
         cropped_faces, restored_faces, restored_img = restorer.enhance(
             input_img,
-            has_aligned=args.aligned,
+            has_aligned=False,
             only_center_face=args.only_center_face,
             paste_back=True,
-            weight=args.weight)
-
+            weight=args.weight, mask=mask)
+        # if i == 2:
+        #     exit(0)
         # save faces
-        for idx, (cropped_face, restored_face) in enumerate(zip(cropped_faces, restored_faces)):
-            # save cropped face
-            save_crop_path = os.path.join(args.output, 'cropped_faces', f'{basename}_{idx:02d}.png')
-            imwrite(cropped_face, save_crop_path)
-            # save restored face
-            if args.suffix is not None:
-                save_face_name = f'{basename}_{idx:02d}_{args.suffix}.png'
-            else:
-                save_face_name = f'{basename}_{idx:02d}.png'
-            save_restore_path = os.path.join(args.output, 'restored_faces', save_face_name)
-            imwrite(restored_face, save_restore_path)
-            # save comparison image
-            cmp_img = np.concatenate((cropped_face, restored_face), axis=1)
-            imwrite(cmp_img, os.path.join(args.output, 'cmp', f'{basename}_{idx:02d}.png'))
+
+        if True:
+            for idx, (cropped_face, restored_face) in enumerate(zip(cropped_faces, restored_faces)):
+                # save cropped face
+                save_crop_path = os.path.join(args.output, 'cropped_faces', f'{basename}_{idx:02d}.png')
+                imwrite(cropped_face, save_crop_path)
+                # save restored face
+                if args.suffix is not None:
+                    save_face_name = f'{basename}_{idx:02d}_{args.suffix}.png'
+                else:
+                    save_face_name = f'{basename}_{idx:02d}.png'
+                save_restore_path = os.path.join(args.output, 'restored_faces', save_face_name)
+                imwrite(restored_face, save_restore_path)
+                # save comparison image
+                cmp_img = np.concatenate((cropped_face, restored_face), axis=1)
+                imwrite(cmp_img, os.path.join(args.output, 'cmp', f'{basename}_{idx:02d}.png'))
 
         # save restored img
         if restored_img is not None:
@@ -161,10 +191,11 @@ def main():
             else:
                 extension = args.ext
 
-            if args.suffix is not None:
-                save_restore_path = os.path.join(args.output, 'restored_imgs', f'{basename}_{args.suffix}.{extension}')
-            else:
-                save_restore_path = os.path.join(args.output, 'restored_imgs', f'{basename}.{extension}')
+            # if args.suffix is not None:
+            #     save_restore_path = os.path.join(args.output, 'restored_imgs', f'{basename}_{args.suffix}.{extension}')
+            # else:
+            #     save_restore_path = os.path.join(args.output, 'restored_imgs', f'{basename}.{extension}')
+            save_restore_path = os.path.join(args.output, 'restored_imgs', f'{basename}.{extension}')
             imwrite(restored_img, save_restore_path)
 
     print(f'Results are in the [{args.output}] folder.')
