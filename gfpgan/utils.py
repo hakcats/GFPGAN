@@ -85,7 +85,7 @@ class GFPGANer():
             face_size=512,
             crop_ratio=(1, 1),
             det_model='retinaface_resnet50',
-            save_ext='png',
+            save_ext='jpeg',
             use_parse=True,
             device=self.device,
             model_rootpath='gfpgan/weights')
@@ -104,7 +104,7 @@ class GFPGANer():
 
     @torch.no_grad()
     @timer
-    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5, mask=0):
+    def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5, mask=0, i=0, basename=0):
         start_time = time.perf_counter()
         # print('*' * 30)
         self.face_helper.clean_all()
@@ -131,6 +131,10 @@ class GFPGANer():
         for cropped_face in self.face_helper.cropped_faces:
             # imwrite(cropped_face, )
             # prepare data
+            # cropped_face = cv2.resize(cropped_face, (512, 512))
+            # cropped_face = cropped_face[:512, :512, :]
+            # print(cropped_face.shape)
+            # cropped_face = cv2.resize(cropped_face, (512, 512))
             cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
             normalize(cropped_face_t, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
             cropped_face_t = cropped_face_t.unsqueeze(0).to(self.device)
@@ -138,12 +142,15 @@ class GFPGANer():
             try:
                 output = self.gfpgan(cropped_face_t, return_rgb=False, weight=weight)[0]
                 # convert to image
+
                 restored_face = tensor2img(output.squeeze(0), rgb2bgr=True, min_max=(-1, 1))
+                # restored_face = cv2.resize(restored_face, (665, 665))
             except RuntimeError as error:
                 print(f'\tFailed inference for GFPGAN: {error}.')
                 restored_face = cropped_face
 
             restored_face = restored_face.astype('uint8')
+            # restored_face = cv2.resize(restored_face, (563, 512))
             self.face_helper.add_restored_face(restored_face)
 
         # print('*' * 30)
@@ -164,7 +171,9 @@ class GFPGANer():
             self.face_helper.get_inverse_affine(None)
             # paste each restored face to the input image
             # restored_img = self.face_helper.paste_faces_to_input_image(upsample_img=None)
-            restored_img = self.face_helper.tmp(mask=mask)
+            # restored_img = self.face_helper.tmp(mask=mask, upsample_img=bg_img)
+            # print(basename)
+            restored_img = self.face_helper.tmp(i=i, basename=basename)
 
             # print('*' * 30)
             end_time = time.perf_counter()
