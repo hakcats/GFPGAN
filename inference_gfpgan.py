@@ -44,7 +44,6 @@ def main():
         default='auto',
         help='Image extension. Options: auto | jpg | png, auto means using the same extension as inputs. Default: auto')
     parser.add_argument('-w', '--weight', type=float, default=0.5, help='Adjustable weights.')
-    args = parser.parse_args()
 
     args = parser.parse_args()
 
@@ -80,34 +79,10 @@ def main():
     else:
         bg_upsampler = None
 
-    # ------------------------ set up GFPGAN restorer ------------------------
-    if args.version == '1':
-        arch = 'original'
-        channel_multiplier = 1
-        model_name = 'GFPGANv1'
-        url = 'https://github.com/TencentARC/GFPGAN/releases/download/v0.1.0/GFPGANv1.pth'
-    elif args.version == '1.2':
-        arch = 'clean'
-        channel_multiplier = 2
-        model_name = 'GFPGANCleanv1-NoCE-C2'
-        url = 'https://github.com/TencentARC/GFPGAN/releases/download/v0.2.0/GFPGANCleanv1-NoCE-C2.pth'
-    elif args.version == '1.3':
-        arch = 'clean'
-        channel_multiplier = 2
-        model_name = 'GFPGANv1.3'
-        url = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.3.pth'
-    elif args.version == '1.4':
-        arch = 'clean'
-        channel_multiplier = 2
-        model_name = 'GFPGANv1.4'
-        url = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth'
-    elif args.version == 'RestoreFormer':
-        arch = 'RestoreFormer'
-        channel_multiplier = 2
-        model_name = 'RestoreFormer'
-        url = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/RestoreFormer.pth'
-    else:
-        raise ValueError(f'Wrong model version {args.version}.')
+    arch = 'clean'
+    channel_multiplier = 2
+    model_name = 'GFPGANv1.4'
+    url = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth'
 
     # determine model paths
     model_path = os.path.join('experiments/pretrained_models', model_name + '.pth')
@@ -127,31 +102,7 @@ def main():
     # ------------------------ restore ------------------------
     i = 0
     mask = 0
-    # out = torch.load('tor/{}.pth'.format(1))
-    # # f = 'tor/{}.pth'.format(1)
-    # # out = torch.load(f)
-    #
-    # mask = np.zeros((512, 512))
-    # MASK_COLORMAP = [0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 0, 0, 0]
-    #
-    # for idx, color in enumerate(MASK_COLORMAP):
-    #     mask[out == idx] = color
-    #
-    # #  blur the mask
-    # # mask = cv2.GaussianBlur(mask, (101, 101), 27)
-    # # mask = cv2.GaussianBlur(mask, (257, 257), 0)
-    # # mask = cv2.GaussianBlur(mask, (101, 101), 11)
-    # # mask = cv2.GaussianBlur(mask, (101, 101), 11)
-    # # remove the black borders
-    # thres = 2
-    # mask[:thres, :] = 0
-    # mask[-thres:, :] = 0
-    # mask[:, :thres] = 0
-    # mask[:, -thres:] = 0
-    # mask = mask / 255.
 
-    # print(mask)
-    # cv2.imwrite('tor/1.jpeg'.format(1), mask)
     for img_path in img_list:
         i += 1
 
@@ -170,26 +121,22 @@ def main():
             only_center_face=args.only_center_face,
             paste_back=True,
             weight=args.weight, mask=mask, i=i, basename=basename)
-        # if i == 3:
-        #     exit(0)
-        # save faces
 
-        if True:
-            for idx, (cropped_face, restored_face) in enumerate(zip(cropped_faces, restored_faces)):
-                # save cropped face
-                save_crop_path = os.path.join(args.output, 'cropped_faces', f'{basename}_{idx:02d}.png')
-                imwrite(cropped_face, save_crop_path)
-                # save restored face
-                if args.suffix is not None:
-                    save_face_name = f'{basename}_{idx:02d}_{args.suffix}.png'
-                else:
-                    save_face_name = f'{basename}_{idx:02d}.png'
-                save_restore_path = os.path.join(args.output, 'restored_faces', save_face_name)
-                imwrite(restored_face, save_restore_path)
-                # save comparison image
-                # restored_face = cv2.resize(restored_face, (512, 512))
-                # cmp_img = np.concatenate((cropped_face, restored_face), axis=1)
-                # imwrite(cmp_img, os.path.join(args.output, 'cmp', f'{basename}_{idx:02d}.png'))
+        for idx, (cropped_face, restored_face) in enumerate(zip(cropped_faces, restored_faces)):
+            # save cropped face
+            save_crop_path = os.path.join(args.output, 'cropped_faces', f'{basename}_{idx:02d}.png')
+            imwrite(cropped_face, save_crop_path)
+            # save restored face
+            if args.suffix is not None:
+                save_face_name = f'{basename}_{idx:02d}_{args.suffix}.png'
+            else:
+                save_face_name = f'{basename}_{idx:02d}.png'
+            save_restore_path = os.path.join(args.output, 'restored_faces', save_face_name)
+            imwrite(restored_face, save_restore_path)
+            # save comparison image
+            # restored_face = cv2.resize(restored_face, (512, 512))
+            # cmp_img = np.concatenate((cropped_face, restored_face), axis=1)
+            # imwrite(cmp_img, os.path.join(args.output, 'cmp', f'{basename}_{idx:02d}.png'))
 
         # save restored img
         if restored_img is not None:
